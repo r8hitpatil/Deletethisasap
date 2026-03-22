@@ -7,9 +7,35 @@ datasource db {
 }
 
 model User {
-  id       String @id @default(uuid())
-  fname    String
-  lname    String
-  email    String @unique
-  password String
+  id            String         @id @default(uuid())
+  fname         String
+  lname         String
+  email         String         @unique
+  password      String
+  createdAt     DateTime       @default(now())
+  role          Role           @default(USER)
+  course        Course[]
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String  @id @default(uuid())
+  userId    String
+  tokenHash String
+  isRevoked Boolean @default(false)
+  user      User    @relation(fields: [userId], references: [id])
+}
+
+model Course {
+  id          String @id @default(uuid())
+  name        String
+  description String
+  userId      String
+  price       Int
+  user        User   @relation(fields: [userId], references: [id])
+}
+
+enum Role {
+  ADMIN
+  USER
 }
