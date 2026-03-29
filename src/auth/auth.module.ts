@@ -3,7 +3,8 @@ import { AuthService } from './auth.service';
 import { UserModule } from 'src/user/user.module';
 import { AuthController } from './auth.controller';
 import { JwtModule } from '@nestjs/jwt';
-import { jwtConstants } from './constants';
+import { jwtConstants } from './constants/auth.constants';
+import { JwtStrategy } from './strategies';
 
 @Module({
   imports: [UserModule,
@@ -13,6 +14,6 @@ import { jwtConstants } from './constants';
       signOptions: { expiresIn: '1hr' },
     }),],
   controllers: [AuthController],
-  providers: [AuthService]
+  providers: [AuthService,JwtStrategy]
 })
 export class AuthModule {}
