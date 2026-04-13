@@ -4,15 +4,17 @@ import { UserService } from 'src/user/user.service';
 import * as argon from 'argon2';
 import { LoginDto } from './dto/loginUser.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { JwtSignService,JwtVerifyService } from './jwt';
+import { Config } from 'src/common/config';
 
 @Injectable()
 export class AuthService {
     constructor(
         private readonly userService:UserService,
         private readonly prisma: PrismaService,
-        private readonly jwtService:JwtService,
+        private readonly signService: JwtSignService,
+        private readonly verifyService: JwtVerifyService,
         private readonly configService:ConfigService
     ){}
 
@@ -24,19 +26,18 @@ export class AuthService {
             throw new Error('Invalid credentials');
         }
 
-        const payload = { id: newUser.id , sub: newUser.id , role: [newUser.role] };
+        const payload = { sub: newUser.id , role: [newUser.role] , email : newUser.email };
+
+        const JWT_RT_EXPIRES_IN = Config.jwt.refreshToken.expiresInMs;
+        const JWT_AT_EXPIRES_IN = Config.jwt.accessToken.expiresInMs;
         
-        const accessToken = await this.jwtService.signAsync(payload, {
-            secret: this.configService.get('ACCESS_SECRET'),
-            expiresIn: '15m',
-        });
+        const JWT_RT_SECRET = this.configService.getOrThrow<string>('REFRESH_SECRET');
+        const JWT_AT_SECRET = this.configService.getOrThrow<string>('ACCESS_SECRET');
 
-        const refreshToken = await this.jwtService.signAsync(payload, {
-            secret: this.configService.get('REFRESH_SECRET'),
-            expiresIn: '7d',
-        });
+        const rToken = await this.signService.sign(payload,JWT_RT_SECRET,JWT_RT_EXPIRES_IN);
+        const aToken = await this.signService.sign(payload,JWT_AT_SECRET,JWT_AT_EXPIRES_IN);
 
-        const hashedRt = await argon.hash(refreshToken);
+        const hashedRt = await argon.hash(rToken);
 
         // Create new session ( new refreshTokens )
         await this.prisma.refreshToken.create({
@@ -47,8 +48,8 @@ export class AuthService {
     });
 
     return {
-        accessToken,
-        refreshToken
+        rToken,
+        aToken
     };
     }
 
@@ -63,19 +64,18 @@ export class AuthService {
             throw new Error('Invalid credentials');
         }
 
-        const payload = { sub: userDetails.id , role: userDetails.role }
+        const payload = { sub: userDetails.id , role: userDetails.role , email : userDetails.email }
 
-        const accessToken = await this.jwtService.signAsync(payload, {
-        secret: this.configService.get('ACCESS_SECRET'),
-        expiresIn: '15m',
-    });
+        const JWT_RT_EXPIRES_IN = Config.jwt.refreshToken.expiresInMs;
+        const JWT_AT_EXPIRES_IN = Config.jwt.accessToken.expiresInMs;
+        
+        const JWT_RT_SECRET = this.configService.getOrThrow<string>('REFRESH_SECRET');
+        const JWT_AT_SECRET = this.configService.getOrThrow<string>('ACCESS_SECRET');
 
-    const refreshToken = await this.jwtService.signAsync(payload, {
-        secret: this.configService.get('REFRESH_SECRET'),
-        expiresIn: '7d',
-    });
+        const aToken = await this.signService.sign(payload,JWT_AT_SECRET,JWT_AT_EXPIRES_IN);
+        const rToken = await this.signService.sign(payload,JWT_RT_SECRET,JWT_RT_EXPIRES_IN);
 
-    const hashedRt = await argon.hash(refreshToken);
+        const hashedRt = await argon.hash(rToken);
 
     // Delete old sessions ( ivalidate old refreshTokens )
     await this.prisma.refreshToken.deleteMany({
@@ -93,8 +93,8 @@ export class AuthService {
     });
 
     return {
-        accessToken,
-        refreshToken
+        aToken,
+        rToken
     };
     }
 
@@ -104,11 +104,15 @@ export class AuthService {
         }
         
         let payload : any;
+
+        const JWT_RT_EXPIRES_IN = Config.jwt.refreshToken.expiresInMs;
+        const JWT_AT_EXPIRES_IN = Config.jwt.accessToken.expiresInMs;
+        
+        const JWT_RT_SECRET = this.configService.getOrThrow<string>('REFRESH_SECRET');
+        const JWT_AT_SECRET = this.configService.getOrThrow<string>('ACCESS_SECRET');
         
         try {
-            payload = await this.jwtService.verifyAsync(refreshToken,{
-            secret : this.configService.get('REFRESH_SECRET')
-        })
+            payload = await this.verifyService.verify(refreshToken,JWT_RT_SECRET);
         } catch (error) {
             throw new UnauthorizedException('Invalid refresh token');
         }
@@ -134,27 +138,30 @@ export class AuthService {
             }
         }
 
+        if(!validToken){
+            throw new UnauthorizedException('Session not found or token mismatch')
+        }
+
         await this.prisma.refreshToken.update({
             where : { id : validToken.id },
             data : { isRevoked : true }
         })
+        await this.prisma.refreshToken.deleteMany({
+        where : {
+            isRevoked : true
+            },
+        })
 
         const newPayload = {
             sub : payload.sub,
+            email : payload.email,
             role : payload.role
         }
 
-        const newAccessToken = await this.jwtService.signAsync(newPayload,{
-            secret : this.configService.get('ACCESS_SECRET'),
-            expiresIn : '15m'
-        })
+        const rToken = await this.signService.sign(newPayload,JWT_RT_SECRET,JWT_RT_EXPIRES_IN);
+        const aToken = await this.signService.sign(newPayload,JWT_AT_SECRET,JWT_AT_EXPIRES_IN);
 
-        const newRefreshToken = await this.jwtService.signAsync(newPayload,{
-            secret : this.configService.get('REFRESH_SECRET'),
-            expiresIn : '7d'
-        })
-
-        const hashedRt = await argon.hash(newRefreshToken);
+        const hashedRt = await argon.hash(rToken);
 
         await this.prisma.refreshToken.create({
             data : {
@@ -164,8 +171,7 @@ export class AuthService {
         })
 
         return { 
-            accessToken : newAccessToken,
-            refreshToken : newRefreshToken
+            aToken,rToken
         }
     }
 }
