@@ -1,8 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { RegisterDto } from 'src/auth/dto/registerUser.dto';
 import { UserService } from 'src/user/user.service';
 import * as argon from 'argon2';
-import { LoginDto } from './dto/loginUser.dto';
+import { LoginDto, RegisterDto } from './dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtSignService,JwtVerifyService } from './jwt';
