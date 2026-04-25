@@ -25,7 +25,7 @@ export class AuthService {
             throw new Error('Invalid credentials');
         }
 
-        const payload = { sub: newUser.id , role: [newUser.role] , email : newUser.email };
+        const payload = { sub: newUser.id , role: newUser.role , email : newUser.email };
 
         const JWT_RT_EXPIRES_IN = Config.jwt.refreshToken.expiresInMs;
         const JWT_AT_EXPIRES_IN = Config.jwt.accessToken.expiresInMs;

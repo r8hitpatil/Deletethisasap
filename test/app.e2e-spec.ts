@@ -12,6 +12,7 @@ import cookieParser from 'cookie-parser';
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let authCookies: string; // To store the cookies
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -21,20 +22,16 @@ describe('AppController (e2e)', () => {
     app = moduleFixture.createNestApplication();
     prisma = moduleFixture.get<PrismaService>(PrismaService);
 
-    
     app.useGlobalPipes(
       new ValidationPipe({
-        whitelist : true,
-    }))
+        whitelist: true,
+      })
+    );
 
     app.use(cookieParser());
 
     await app.init();
 
-    const httpServer = app.getHttpServer();
-    // const port = 3000;
-    // pactum.request.setBaseUrl(`http://localhost:${port}`);
-    
     await app.listen(0);
     const url = await app.getUrl();
     pactum.request.setBaseUrl(url);
@@ -45,7 +42,7 @@ describe('AppController (e2e)', () => {
   afterAll(async () => {
     await app.close();
   });
-  
+
   it('/ (GET)', () => {
     return request(app.getHttpServer())
       .get('/')
@@ -53,14 +50,16 @@ describe('AppController (e2e)', () => {
       .expect('Hello World!');
   });
 
-  describe(('Auth'),() => {
-    const dto:RegisterDto = {
-      fname: "Rohit",
-      lname: "Patil",
-      email:'rohit@gmail.com',
-      password:'Rohit@123'
+  describe('Auth', () => {
+    const dto: RegisterDto = {
+      fname: 'Rohit',
+      lname: 'Patil',
+      email: 'rohit@gmail.com',
+      password: 'Rohit@123',
+      role: 'ADMIN',
     };
-    describe('Signup',() => {
+
+    describe('Signup', () => {
       it('should throw if email empty', () => {
         return pactum
           .spec()
@@ -70,6 +69,7 @@ describe('AppController (e2e)', () => {
           })
           .expectStatus(400);
       });
+
       it('should throw if password empty', () => {
         return pactum
           .spec()
@@ -79,68 +79,86 @@ describe('AppController (e2e)', () => {
           })
           .expectStatus(400);
       });
+
       it('should throw if no body provided', () => {
         return pactum.spec().post('/auth/register').expectStatus(400);
       });
-      it('should signup',() => {
+
+      it('should signup', () => {
         return pactum
-        .spec()
-        .post('/auth/register')
-        .withBody(dto)
-        .expectStatus(201)
-        .stores('accessToken','res.headers.set-cookie[1]')
-        .stores('refreshToken','res.headers.set-cookie[0]')
-      })
-    })
-  })
-  describe('Create Course',() => {
-    const dto : CreateCourseDto = {
-      "name":"Dhurv Kathee",
-      "description":"Gand maro course",
-      "price":5
+          .spec()
+          .post('/auth/register')
+          .withBody(dto)
+          .expectStatus(201)
+          .expect((ctx) => {
+            // Capture and format cookies
+            const cookies = ctx.res.headers['set-cookie'];
+            authCookies = cookies!.map(cookie => cookie.split(';')[0]).join('; '); // stores the cookies in authCookies
+          });
+      });
+    });
+  });
+
+  describe('Create Course', () => {
+    const dto: CreateCourseDto = {
+      name: 'Dhruv Rathee Course',
+      description: 'Advanced Programming',
+      price: 5,
     };
-    describe('Create',() => {
+
+    describe('Create', () => {
       it('should throw if name empty', () => {
         return pactum
           .spec()
           .post('/courses/create')
-          .withBody({
-            name: dto.name,
+          .withHeaders({
+            Cookie: authCookies,
           })
-          .expectStatus(400);
-      });
-      it('should throw if description empty', () => {
-        return pactum
-          .spec()
-          .post('/courses/create')
           .withBody({
             description: dto.description,
-          })
-          .expectStatus(400);
-      });
-      it('should throw if price empty', () => {
-        return pactum
-          .spec()
-          .post('/courses/create')
-          .withBody({
             price: dto.price,
           })
           .expectStatus(400);
       });
+
+      it('should throw if description empty', () => {
+        return pactum
+          .spec()
+          .post('/courses/create')
+          .withHeaders({
+            Cookie: authCookies,
+          })
+          .withBody({
+            name: dto.name,
+            price: dto.price,
+          })
+          .expectStatus(400);
+      });
+
+      it('should throw if price empty', () => {
+        return pactum
+          .spec()
+          .post('/courses/create')
+          .withHeaders({
+            Cookie: authCookies,
+          })
+          .withBody({
+            name: dto.name,
+            description: dto.description,
+          })
+          .expectStatus(400);
+      });
+
       it('should create course', () => {
         return pactum
           .spec()
           .post('/courses/create')
-          .withBody(dto)
-          .withCookies({
-            'access_token': '$S{accessToken}',
-            'refresh_token': '$S{refreshToken}'
+          .withHeaders({
+            Cookie: authCookies,
           })
+          .withBody(dto)
           .expectStatus(201);
       });
-      it('debug tokens', () => {
-        console.log(pactum.stash.getDataStore());
-      });
-    })
-  })
+    });
+  });
 });
