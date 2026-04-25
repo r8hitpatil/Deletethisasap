@@ -153,6 +153,13 @@ export class PrismaService
     }
   }
 
+  async cleanDb() {
+  const tables = ['refreshToken', 'course', 'user'] as const;
+  for (const table of tables) {
+      await (this[table] as any).deleteMany({});
+    }
+  }
+
   async executeWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
     let lastError: Error | undefined;
 

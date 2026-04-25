@@ -1,8 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { RegisterDto } from 'src/auth/dto/registerUser.dto';
 import { UserService } from 'src/user/user.service';
 import * as argon from 'argon2';
-import { LoginDto } from './dto/loginUser.dto';
+import { LoginDto, RegisterDto } from './dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtSignService,JwtVerifyService } from './jwt';
@@ -26,7 +25,7 @@ export class AuthService {
             throw new Error('Invalid credentials');
         }
 
-        const payload = { sub: newUser.id , role: [newUser.role] , email : newUser.email };
+        const payload = { sub: newUser.id , role: newUser.role , email : newUser.email };
 
         const JWT_RT_EXPIRES_IN = Config.jwt.refreshToken.expiresInMs;
         const JWT_AT_EXPIRES_IN = Config.jwt.accessToken.expiresInMs;

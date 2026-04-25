@@ -8,7 +8,10 @@ import { ConfigModule } from '@nestjs/config';
 import { CourseModule } from './course/course.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({isGlobal: true,}),AuthModule, UserModule, PrismaModule, CourseModule],
+  imports: [ConfigModule.forRoot({
+    isGlobal: true,
+  }),
+  AuthModule, UserModule, PrismaModule, CourseModule],
   controllers: [AppController],
   providers: [AppService],
 })
